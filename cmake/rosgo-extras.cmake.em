@@ -26,28 +26,30 @@ file(MAKE_DIRECTORY ${ROSGO_PKG})
 
 
 macro(rosgo_add_executable _package) 
-    set(_output ${PROJECT_SOURCE_DIR}/bin/${_package}) 
-    message(STATUS GOPATH=$ENV{GOPATH})
-    add_custom_command(
-        OUTPUT ${_output}
+    #set(output ${ROSGO_BIN}/${_package}) 
+    set(src_link ${CATKIN_DEVEL_PREFIX}/go/src/${_package})
+    add_custom_target(
+        ${_package} ALL
+        COMMAND ${CMAKE_COMMAND} -E create_symlink ${PROJECT_SOURCE_DIR}/src/${_package} ${src_link}
         COMMAND env GOPATH=$ENV{GOPATH} go install ${_package}
     )
-    add_custom_target(${_package} ALL DEPENDS ${_output})
 endmacro()
 
 
 macro(rosgo_add_library _package)
-    set(_output ${PROJECT_SOURCE_DIR}/pkg/${ROSGO_OS}_${ROSGO_ARCH}/${_package}.a) 
-    message(STATUS GOPATH=$ENV{GOPATH})
-    add_custom_command(
-        OUTPUT ${_output}
+    #set(output ${ROSGO_PKG}/${_package}.a) 
+    set(src_link ${CATKIN_DEVEL_PREFIX}/go/src/${_package})
+    add_custom_target(
+        ${_package} ALL
+        COMMAND ${CMAKE_COMMAND} -E create_symlink ${PROJECT_SOURCE_DIR}/src/${_package} ${src_link}
         COMMAND env GOPATH=$ENV{GOPATH} go install ${_package}
     )
-    add_custom_target(${_package} ALL DEPENDS ${_output})
 endmacro()
+
+
 
 
 # At DEVELSPACE, this macro export PROJECT_SOURCE_DIR to GOPATH
 macro(catkin_rosgo_setup)
-    set(ENV{GOPATH} "${PROJECT_SOURCE_DIR}:$ENV{GOPATH}")
+    #    set(ENV{GOPATH} "${PROJECT_SOURCE_DIR}:$ENV{GOPATH}")
 endmacro()
