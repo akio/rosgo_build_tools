@@ -1,55 +1,115 @@
 # vim: ft=cmake :
 @[if DEVELSPACE]@
-set(ROSGO_ROOT "${CATKIN_DEVEL_PREFIX}/go")
+set(ROSGO_ROOT "${CATKIN_DEVEL_PREFIX}/lib/go")
 @[else]@
-set(ROSGO_ROOT "${CMAKE_INSTALL_PREFIX}/go")
+set(ROSGO_ROOT "${CMAKE_INSTALL_PREFIX}/lib/go")
 @[end if]@
-
-
 file(MAKE_DIRECTORY ${ROSGO_ROOT})
 
-if($ENV{GOPATH})
-    set(ENV{GOPATH} ${ROSGO_ROOT}:$ENV{GOPATH})
-else()
-    set(ENV{GOPATH} ${ROSGO_ROOT})
-endif()
-
-set(ROSGO_SRC ${ROSGO_ROOT}/src)
 set(ROSGO_BIN ${ROSGO_ROOT}/bin)
+set(ROSGO_SRC ${ROSGO_ROOT}/src)
 execute_process(COMMAND go env GOARCH OUTPUT_VARIABLE ROSGO_ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)
 execute_process(COMMAND go env GOOS OUTPUT_VARIABLE ROSGO_OS OUTPUT_STRIP_TRAILING_WHITESPACE)
 set(ROSGO_PKG ${ROSGO_ROOT}/pkg/${ROSGO_OS}_${ROSGO_ARCH})
 
-file(MAKE_DIRECTORY ${ROSGO_SRC})
-file(MAKE_DIRECTORY ${ROSGO_BIN})
-file(MAKE_DIRECTORY ${ROSGO_PKG})
+set(ROSGO_PATH "${ROSGO_ROOT}" PARENT_SCOPE)
 
 
-macro(rosgo_add_executable _package) 
-    #set(output ${ROSGO_BIN}/${_package}) 
-    set(src_link ${CATKIN_DEVEL_PREFIX}/go/src/${_package})
+function(rosgo_add_executable) 
+@[if DEVELSPACE]@
+    set(ROSGO_ROOT "${CATKIN_DEVEL_PREFIX}/lib/go")
+@[else]@
+    set(ROSGO_ROOT "${CMAKE_INSTALL_PREFIX}/lib/go")
+@[end if]@
+    file(MAKE_DIRECTORY ${ROSGO_ROOT})
+    
+    set(ROSGO_BIN ${ROSGO_ROOT}/bin)
+    set(ROSGO_SRC ${ROSGO_ROOT}/src)
+    execute_process(COMMAND go env GOARCH OUTPUT_VARIABLE ROSGO_ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND go env GOOS OUTPUT_VARIABLE ROSGO_OS OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(ROSGO_PKG ${ROSGO_ROOT}/pkg/${ROSGO_OS}_${ROSGO_ARCH})
+
+    set(options)
+    set(one_value_args)
+    set(multi_value_args DEPENDS)
+    cmake_parse_arguments(rosgo_add_executable "${options}" "${one_value_args}"
+                          "${multi_value_args}" "${ARGN}")
+    list(GET rosgo_add_executable_UNPARSED_ARGUMENTS 0 target)
+    list(GET rosgo_add_executable_UNPARSED_ARGUMENTS 1 package)
+    message(STATUS "exe target=${target}")
+    message(STATUS "exe package=${package}")
+
+    message(STATUS "exe GOPATH=${ROSGO_PATH}")
+    get_filename_component(exe_name ${package} NAME)
+    set(exe ${ROSGO_BIN}/${exe_name})
     add_custom_target(
-        ${_package} ALL
-        COMMAND ${CMAKE_COMMAND} -E create_symlink ${PROJECT_SOURCE_DIR}/src/${_package} ${src_link}
-        COMMAND env GOPATH=$ENV{GOPATH} go install ${_package}
+        ${target} ALL
+        COMMAND env GOPATH=${ROSGO_PATH} go build -o ${exe} ${package}
+        DEPENDS ${rosgo_add_executable_DEPENDS}
     )
-endmacro()
+    #install(PROGRAMS ${exe} DESTINATION ${CATKIN_GLOBAL_LIB_DESTINATION}/go/bin)
+endfunction()
 
 
-macro(rosgo_add_library _package)
-    #set(output ${ROSGO_PKG}/${_package}.a) 
-    set(src_link ${CATKIN_DEVEL_PREFIX}/go/src/${_package})
+function(rosgo_add_library)
+@[if DEVELSPACE]@
+    set(ROSGO_ROOT "${CATKIN_DEVEL_PREFIX}/lib/go")
+@[else]@
+    set(ROSGO_ROOT "${CMAKE_INSTALL_PREFIX}/lib/go")
+@[end if]@
+    file(MAKE_DIRECTORY ${ROSGO_ROOT})
+    
+    set(ROSGO_BIN ${ROSGO_ROOT}/bin)
+    set(ROSGO_SRC ${ROSGO_ROOT}/src)
+    execute_process(COMMAND go env GOARCH OUTPUT_VARIABLE ROSGO_ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND go env GOOS OUTPUT_VARIABLE ROSGO_OS OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(ROSGO_PKG ${ROSGO_ROOT}/pkg/${ROSGO_OS}_${ROSGO_ARCH})
+
+    set(options)
+    set(one_value_args)
+    set(multi_value_args DEPENDS)
+    cmake_parse_arguments(rosgo_add_library "${options}" "${one_value_args}"
+                          "${multi_value_args}" "${ARGN}")
+    list(GET rosgo_add_library_UNPARSED_ARGUMENTS 0 target)
+    list(GET rosgo_add_library_UNPARSED_ARGUMENTS 1 package)
+    message(STATUS "lib target=${target}")
+    message(STATUS "lib package=${package}")
+    message(STATUS "lib GOPATH=${ROSGO_PATH}")
     add_custom_target(
-        ${_package} ALL
-        COMMAND ${CMAKE_COMMAND} -E create_symlink ${PROJECT_SOURCE_DIR}/src/${_package} ${src_link}
-        COMMAND env GOPATH=$ENV{GOPATH} go install ${_package}
+        ${target} ALL
+        COMMAND env GOPATH=${ROSGO_PATH} go build -o ${ROSGO_PKG}/${package} ${package}
+        DEPENDS ${rosgo_add_library_DEPENDS}
     )
-endmacro()
+
+    #install(
+    #    DIRECTORY ${CMAKE_SOURCE_DIR}/src/${package} DESTINATION ${CATKIN_GLOBAL_LIB_DESTINATION}/go/src
+    #    PATTERN "*.go"
+    #    PATTERN "*_test.go" EXCLUDE 
+    #)
+endfunction()
 
 
+function(rosgo_add_test)
+    set(options)
+    set(one_value_args)
+    set(multi_value_args DEPENDS)
+    cmake_parse_arguments(rosgo_add_test "${options}" "${one_value_args}"
+                          "${multi_value_args}" "${ARGN}")
+    list(GET rosgo_add_test_UNPARSED_ARGUMENTS 0 package)
+
+    add_custom_target(
+        run_${PROJECT_NAME}_${target}_tests
+        COMMAND env GOPATH=${ROSGO_PATH} go test ${package}
+        DEPENDS ${rosgo_add_test_DEPENDS}
+    )
+    add_dependencies(run_tests run_${PROJECT_NAME}_${package}_tests)
+endfunction()
 
 
 # At DEVELSPACE, this macro export PROJECT_SOURCE_DIR to GOPATH
-macro(catkin_rosgo_setup)
-    #    set(ENV{GOPATH} "${PROJECT_SOURCE_DIR}:$ENV{GOPATH}")
+# Each package that cotains go library must invoke this macro
+macro(rosgo_setup)
+    set(ROSGO_PATH "${PROJECT_SOURCE_DIR}:${ROSGO_PATH}")
+    set(ROSGO_PATH "${ROSGO_PATH}" PARENT_SCOPE)
+    message(STATUS "set GOPATH=${ROSGO_PATH}")
 endmacro()
