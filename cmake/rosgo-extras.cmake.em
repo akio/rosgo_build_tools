@@ -1,11 +1,7 @@
 # vim: ft=cmake :
 
 function(_rosgo_setup_global_variable)
-@[if DEVELSPACE]@
     set(libdir "${CATKIN_DEVEL_PREFIX}/lib")
-@[else]@
-    set(libdir "${CMAKE_INSTALL_PREFIX}/lib")
-@[end if]@
     set(root "${libdir}/go")
     file(MAKE_DIRECTORY ${root})
     execute_process(COMMAND go env GOARCH OUTPUT_VARIABLE goarch OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -25,25 +21,44 @@ endfunction()
 _rosgo_setup_global_variable()
 
 
-function(_rosgo_get_gopath var)
-    get_property(paths GLOBAL PROPERTY _ROSGO_PATH)
-    list(APPEND paths ${PROJECT_SOURCE_DIR})
-    list(REMOVE_DUPLICATES paths)
-    set(gopath "")
-    foreach(p ${paths})
-        if("${gopath}" STREQUAL "")
-            set(gopath "${p}")
-        else()
-            set(gopath "${p}:${gopath}")
+# Clear old symlinks and create new ones that point original sources.
+function(_rosgo_mirror_go_files package var)
+    get_filename_component(orig_dir "${PROJECT_SOURCE_DIR}/src/${package}" ABSOLUTE)
+    get_filename_component(link_dir "${CATKIN_DEVEL_PREFIX}/lib/go/src/${package}" ABSOLUTE)
+
+    file(MAKE_DIRECTORY "${link_dir}")
+
+    file(GLOB orig_paths "${orig_dir}/*.go")
+    set(filenames "")
+    foreach(p ${orig_paths})
+        get_filename_component(f ${p} NAME)
+        list(APPEND filenames "${f}")
+    endforeach()
+
+    file(GLOB last_items "${link_dirs}/*.go")
+    foreach(item ${last_items})
+        if(IS_SYMLINK "${item}")
+            file(REMOVE "${item}")
         endif()
     endforeach()
-    set("${var}" ${gopath} PARENT_SCOPE)
+
+    set(links "")
+    foreach(filename ${filenames})
+        set(orig "${orig_dir}/${filename}")
+        set(link "${link_dir}/${filename}")
+        add_custom_command(
+            OUTPUT "${link}"
+            COMMAND ${CMAKE_COMMAND} -E create_symlink "${orig}" "${link}"
+            )
+        list(APPEND links "${link}")
+    endforeach()
+    set(${var} ${links} PARENT_SCOPE)
 endfunction()
 
 
-function(rosgo_add_executable) 
+function(rosgo_add_executable)
     set(options)
-    set(one_value_args)
+    set(one_value_args TARGET)
     set(multi_value_args DEPENDS)
     cmake_parse_arguments(rosgo_add_executable "${options}" "${one_value_args}"
                           "${multi_value_args}" "${ARGN}")
@@ -54,22 +69,17 @@ function(rosgo_add_executable)
             set(rosgo_add_executable_TARGET ${target})
         endif()
     endif()
-    #message(STATUS "target=${rosgo_add_executable_TARGET}")
-    #message(STATUS "exe target=${target}")
-    #message(STATUS "exe package=${package}")
 
-    _rosgo_get_gopath(gopath)
-    get_property(gobin GLOBAL PROPERTY _ROSGO_BIN)
-    #message(STATUS "exe GOPATH=${gopath}")
-    get_filename_component(exe_name ${package} NAME)
-    set(exe ${gobin}/${PROJECT_NAME}/${exe_name})
+    _rosgo_mirror_go_files(${package} src_links)
+
+    string(REPLACE "/" ";" exe_path "${package}")
+    list(GET exe_path -1 exe_name)
+    set(exe "${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/${exe_name}")
+
     add_custom_target(
-        ${rosgo_add_executable_TARGET} ALL
-        COMMAND env GOPATH=${gopath} go build -o ${exe} ${package}
-        DEPENDS ${rosgo_add_executable_DEPENDS}
-    )
-
-    #install(PROGRAMS ${exe} DESTINATION ${CATKIN_GLOBAL_LIB_DESTINATION}/go/bin)
+            ${rosgo_add_executable_TARGET} ALL
+            COMMAND env GOPATH=$ENV{GOPATH} go build -o ${exe} ${package}
+            DEPENDS ${DEPENDS} ${src_links})
 endfunction()
 
 
@@ -86,23 +96,14 @@ function(rosgo_add_library)
             set(rosgo_add_library_TARGET ${target})
         endif()
     endif()
-    message(STATUS "target=${rosgo_add_library_TARGET}")
-    #message(STATUS "lib target=${target}")
-    #message(STATUS "lib package=${package}")
-    _rosgo_get_gopath(gopath)
-    get_property(gopkg GLOBAL PROPERTY _ROSGO_PKG)
-    #message(STATUS "lib GOPATH=${gopath}")
-    add_custom_target(
-        ${rosgo_add_library_TARGET} ALL
-        COMMAND env GOPATH=${gopath} go build -o ${gopkg}/${package} ${package}
-        DEPENDS ${rosgo_add_library_DEPENDS}
-    )
 
-    #install(
-    #    DIRECTORY ${CMAKE_SOURCE_DIR}/src/${package} DESTINATION ${CATKIN_GLOBAL_LIB_DESTINATION}/go/src
-    #    PATTERN "*.go"
-    #    PATTERN "*_test.go" EXCLUDE 
-    #)
+    _rosgo_mirror_go_files(${package} src_links)
+    get_property(gopkg GLOBAL PROPERTY _ROSGO_PKG)
+
+    add_custom_target(
+            ${rosgo_add_library_TARGET} ALL
+            COMMAND env GOPATH=$ENV{GOPATH} go build -o ${gopkg}/${package}.a ${package}
+            DEPENDS ${DEPENDS} ${src_links})
 endfunction()
 
 
@@ -115,32 +116,20 @@ function(rosgo_add_test)
     list(GET rosgo_add_test_UNPARSED_ARGUMENTS 0 package)
     string(REPLACE "/" "_" target "${package}")
 
-    _rosgo_get_gopath(gopath)
+    _rosgo_mirror_go_files(${package} src_links)
+
     add_custom_target(
         run_tests_${PROJECT_NAME}_gotest_${target}
-        COMMAND env GOPATH=${gopath} go test ${package}
-        DEPENDS ${rosgo_add_test_DEPENDS}
-    )
+        COMMAND env GOPATH=$ENV{GOPATH} go test ${package}
+        DEPENDS ${rosgo_add_test_DEPENDS} ${src_links})
 
+    # Register this test to workspace-wide run_tests target
     if(NOT TARGET run_tests_${PROJECT_NAME}_gotest)
         add_custom_target(run_tests_${PROJECT_NAME}_gotest)
         add_dependencies(run_tests run_tests_${PROJECT_NAME}_gotest)
     endif()
     add_dependencies(run_tests_${PROJECT_NAME}_gotest
                      run_tests_${PROJECT_NAME}_gotest_${target})
-endfunction()
-
-
-function(rosgo_gopath)
-    get_property(_gopath GLOBAL PROPERTY _ROSGO_PATH)
-    #message(STATUS "get GOPATH=${_gopath}")
-    foreach(p ${ARGV})
-        get_filename_component(abspath ${p} ABSOLUTE)
-        message(STATUS "append gopath+=${abspath}")
-        set_property(GLOBAL APPEND PROPERTY _ROSGO_PATH "${abspath}")
-    endforeach()
-    #get_property(x GLOBAL PROPERTY _ROSGO_PATH)
-    #message(STATUS "append GOPATH=${x}")
 endfunction()
 
 

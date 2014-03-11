@@ -1,15 +1,13 @@
 @[if DEVELSPACE]@
 if [ $GOPATH ]; then
-    export GOPATH="@(CATKIN_DEVEL_PREFIX)/go":"$GOPATH"
+    export GOPATH="@(CATKIN_DEVEL_PREFIX)/lib/go":"$GOPATH"
 else
-    export GOPATH="@(CATKIN_DEVEL_PREFIX)/go"
+    export GOPATH="@(CATKIN_DEVEL_PREFIX)/lib/go"
 fi
-export PATH="$PATH":"@(CATKIN_DEVEL_PREFIX)/go/bin"
 @[else]@
 if [ $GOPATH ]; then
-    export GOPATH="@(CMAKE_INSTALL_PREFIX)/go":"$GOPATH"
+    export GOPATH="${CATKIN_ENV_HOOK_WORKSPACE}/lib/go":"$GOPATH"
 else
-    export GOPATH="@(CMAKE_INSTALL_PREFIX)/go"
+    export GOPATH="${CATKIN_ENV_HOOK_WORKSPACE}/lib/go"
 fi
-export PATH="$PATH":"@(CMAKE_INSTALL_PREFIX)/go/bin"
 @[end if]@
