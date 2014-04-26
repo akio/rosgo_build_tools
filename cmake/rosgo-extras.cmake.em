@@ -20,6 +20,13 @@ endfunction()
 # This will be evaluated per each project that depend `rosgo_build_tools`.
 _rosgo_setup_global_variable()
 
+function(_rosgo_make_gopath gopath_result)
+  if("$ENV{GOPATH}" STREQUAL "")
+    set(${gopath_result} ${CATKIN_DEVEL_PREFIX}/lib/go PARENT_SCOPE)
+  else()
+    set(${gopath_result} ${CATKIN_DEVEL_PREFIX}/lib/go:$ENV{GOPATH} PARENT_SCOPE)
+  endif()    
+endfunction()
 
 # Clear old symlinks and create new ones that point original sources.
 function(_rosgo_mirror_go_files package var)
@@ -76,10 +83,12 @@ function(rosgo_add_executable)
     list(GET exe_path -1 exe_name)
     set(exe "${CATKIN_DEVEL_PREFIX}/lib/${PROJECT_NAME}/${exe_name}")
 
+    _rosgo_make_gopath(gopath)
+
     add_custom_target(
             ${rosgo_add_executable_TARGET} ALL
-            COMMAND env GOPATH=$ENV{GOPATH} go build -o ${exe} ${package}
-            DEPENDS ${DEPENDS} ${src_links})
+            COMMAND env GOPATH=${gopath} go build -o ${exe} ${package}
+            DEPENDS ${rosgo_add_executable_DEPENDS} ${src_links})
 endfunction()
 
 
@@ -100,10 +109,12 @@ function(rosgo_add_library)
     _rosgo_mirror_go_files(${package} src_links)
     get_property(gopkg GLOBAL PROPERTY _ROSGO_PKG)
 
+    _rosgo_make_gopath(gopath)
+
     add_custom_target(
             ${rosgo_add_library_TARGET} ALL
-            COMMAND env GOPATH=$ENV{GOPATH} go build -o ${gopkg}/${package}.a ${package}
-            DEPENDS ${DEPENDS} ${src_links})
+            COMMAND env GOPATH=${gopath} go build -o ${gopkg}/${package}.a ${package}
+            DEPENDS ${rosgo_add_library_DEPENDS} ${src_links})
 endfunction()
 
 
@@ -118,9 +129,11 @@ function(rosgo_add_test)
 
     _rosgo_mirror_go_files(${package} src_links)
 
+    _rosgo_make_gopath(gopath)
+
     add_custom_target(
         run_tests_${PROJECT_NAME}_gotest_${target}
-        COMMAND env GOPATH=$ENV{GOPATH} go test ${package}
+        COMMAND env GOPATH=${gopath} go test ${package}
         DEPENDS ${rosgo_add_test_DEPENDS} ${src_links})
 
     # Register this test to workspace-wide run_tests target
