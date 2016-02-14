@@ -17,16 +17,21 @@ function(_rosgo_setup_global_variable)
     set_property(GLOBAL APPEND PROPERTY _ROSGO_PATH "${PROJECT_SOURCE_DIR}")
 endfunction()
 
+
 # This will be evaluated per each project that depend `rosgo_build_tools`.
 _rosgo_setup_global_variable()
+
+set(catkin_GO_LIBRARIES "")
+
 
 function(_rosgo_make_gopath gopath_result)
   if("$ENV{GOPATH}" STREQUAL "")
     set(${gopath_result} ${CATKIN_DEVEL_PREFIX}/lib/go PARENT_SCOPE)
   else()
     set(${gopath_result} ${CATKIN_DEVEL_PREFIX}/lib/go:$ENV{GOPATH} PARENT_SCOPE)
-  endif()    
+  endif()
 endfunction()
+
 
 # Clear old symlinks and create new ones that point original sources.
 function(_rosgo_mirror_go_files package var)
@@ -63,17 +68,18 @@ function(_rosgo_mirror_go_files package var)
 endfunction()
 
 
-function(rosgo_add_executable)
+# Add executable target
+function(catkin_add_go_executable)
     set(options)
     set(one_value_args TARGET)
     set(multi_value_args DEPENDS)
-    cmake_parse_arguments(rosgo_add_executable "${options}" "${one_value_args}"
+    cmake_parse_arguments(catkin_add_go_executable "${options}" "${one_value_args}"
                           "${multi_value_args}" "${ARGN}")
-    list(GET rosgo_add_executable_UNPARSED_ARGUMENTS 0 package)
+    list(GET catkin_add_go_executable_UNPARSED_ARGUMENTS 0 package)
     if("${rosgo_add_executable_TARGET}" STREQUAL "")
         string(REPLACE "/" "_" target "${PROJECT_NAME}_${package}")
         if(NOT ${target} STREQUAL ${PROJECT_NAME}_NOTFOUND)
-            set(rosgo_add_executable_TARGET ${target})
+            set(catkin_add_go_executable_TARGET ${target})
         endif()
     endif()
 
@@ -86,23 +92,24 @@ function(rosgo_add_executable)
     _rosgo_make_gopath(gopath)
 
     add_custom_target(
-            ${rosgo_add_executable_TARGET} ALL
+            ${catkin_add_go_executable_TARGET} ALL
             COMMAND env GOPATH=${gopath} go build -o ${exe} ${package}
-            DEPENDS ${rosgo_add_executable_DEPENDS} ${src_links})
+            DEPENDS ${catkin_add_go_executable_DEPENDS} ${src_links})
 endfunction()
 
 
-function(rosgo_add_library)
+# Add library target
+function(catkin_add_go_library)
     set(options)
     set(one_value_args TARGET)
     set(multi_value_args DEPENDS)
-    cmake_parse_arguments(rosgo_add_library "${options}" "${one_value_args}"
+    cmake_parse_arguments(catkin_add_go_library "${options}" "${one_value_args}"
                           "${multi_value_args}" "${ARGN}")
-    list(GET rosgo_add_library_UNPARSED_ARGUMENTS 0 package)
+    list(GET catkin_add_go_library_UNPARSED_ARGUMENTS 0 package)
     if("${rosgo_add_library_TARGET}" STREQUAL "")
         string(REPLACE "/" "_" target "${PROJECT_NAME}_${package}")
         if(NOT ${target} STREQUAL ${PROJECT_NAME}_NOTFOUND)
-            set(rosgo_add_library_TARGET ${target})
+            set(catkin_add_go_library_TARGET ${target})
         endif()
     endif()
 
@@ -112,19 +119,21 @@ function(rosgo_add_library)
     _rosgo_make_gopath(gopath)
 
     add_custom_target(
-            ${rosgo_add_library_TARGET} ALL
+            ${catkin_add_go_library_TARGET} ALL
             COMMAND env GOPATH=${gopath} go build -o ${gopkg}/${package}.a ${package}
-            DEPENDS ${rosgo_add_library_DEPENDS} ${src_links})
+            DEPENDS ${catkin_add_go_library_DEPENDS} ${src_links})
+    list(INSERT catkin_GO_LIBRARIES 0 ${catkin_add_go_library_TARGET})
 endfunction()
 
 
-function(rosgo_add_test)
+# Add test target
+function(catkin_add_go_test)
     set(options)
     set(one_value_args)
     set(multi_value_args DEPENDS)
-    cmake_parse_arguments(rosgo_add_test "${options}" "${one_value_args}"
+    cmake_parse_arguments(catkin_add_go_test "${options}" "${one_value_args}"
                           "${multi_value_args}" "${ARGN}")
-    list(GET rosgo_add_test_UNPARSED_ARGUMENTS 0 package)
+    list(GET catkin_add_go_test_UNPARSED_ARGUMENTS 0 package)
     string(REPLACE "/" "_" target "${package}")
 
     _rosgo_mirror_go_files(${package} src_links)
@@ -132,17 +141,17 @@ function(rosgo_add_test)
     _rosgo_make_gopath(gopath)
 
     add_custom_target(
-        run_tests_${PROJECT_NAME}_gotest_${target}
+        run_tests_${PROJECT_NAME}_go_test_${target}
         COMMAND env GOPATH=${gopath} go test ${package}
-        DEPENDS ${rosgo_add_test_DEPENDS} ${src_links})
+        DEPENDS ${catkin_add_go_test_DEPENDS} ${src_links})
 
     # Register this test to workspace-wide run_tests target
-    if(NOT TARGET run_tests_${PROJECT_NAME}_gotest)
-        add_custom_target(run_tests_${PROJECT_NAME}_gotest)
-        add_dependencies(run_tests run_tests_${PROJECT_NAME}_gotest)
+    if(NOT TARGET run_tests_${PROJECT_NAME}_go_test)
+        add_custom_target(run_tests_${PROJECT_NAME}_go_test)
+        add_dependencies(run_tests run_tests_${PROJECT_NAME}_go_test)
     endif()
-    add_dependencies(run_tests_${PROJECT_NAME}_gotest
-                     run_tests_${PROJECT_NAME}_gotest_${target})
+    add_dependencies(run_tests_${PROJECT_NAME}_go_test
+                     run_tests_${PROJECT_NAME}_go_test_${target})
 endfunction()
 
 
