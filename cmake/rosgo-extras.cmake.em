@@ -15,13 +15,15 @@ function(_rosgo_setup_global_variable)
         set_property(GLOBAL PROPERTY _ROSGO_PATH "${root}")
     endif()
     set_property(GLOBAL APPEND PROPERTY _ROSGO_PATH "${PROJECT_SOURCE_DIR}")
+
+    if("${catkin_GO_LIBRARIES}" STREQUAL "")
+        set(catkin_GO_LIBRARIES "" PARENT_SCOPE)
+    endif()
 endfunction()
 
 
 # This will be evaluated per each project that depend `rosgo_build_tools`.
 _rosgo_setup_global_variable()
-
-set(catkin_GO_LIBRARIES "")
 
 
 function(_rosgo_make_gopath gopath_result)
@@ -76,7 +78,7 @@ function(catkin_add_go_executable)
     cmake_parse_arguments(catkin_add_go_executable "${options}" "${one_value_args}"
                           "${multi_value_args}" "${ARGN}")
     list(GET catkin_add_go_executable_UNPARSED_ARGUMENTS 0 package)
-    if("${rosgo_add_executable_TARGET}" STREQUAL "")
+    if("${catkin_add_go_executable_TARGET}" STREQUAL "")
         string(REPLACE "/" "_" target "${PROJECT_NAME}_${package}")
         if(NOT ${target} STREQUAL ${PROJECT_NAME}_NOTFOUND)
             set(catkin_add_go_executable_TARGET ${target})
@@ -106,7 +108,7 @@ function(catkin_add_go_library)
     cmake_parse_arguments(catkin_add_go_library "${options}" "${one_value_args}"
                           "${multi_value_args}" "${ARGN}")
     list(GET catkin_add_go_library_UNPARSED_ARGUMENTS 0 package)
-    if("${rosgo_add_library_TARGET}" STREQUAL "")
+    if("${catkin_add_go_library_TARGET}" STREQUAL "")
         string(REPLACE "/" "_" target "${PROJECT_NAME}_${package}")
         if(NOT ${target} STREQUAL ${PROJECT_NAME}_NOTFOUND)
             set(catkin_add_go_library_TARGET ${target})
@@ -140,10 +142,13 @@ function(catkin_add_go_test)
 
     _rosgo_make_gopath(gopath)
 
+    set(_depends "${catkin_add_go_test_DEPENDS};${src_links}")
+
     add_custom_target(
         run_tests_${PROJECT_NAME}_go_test_${target}
-        COMMAND env GOPATH=${gopath} go test ${package}
-        DEPENDS ${catkin_add_go_test_DEPENDS} ${src_links})
+        #COMMAND env GOPATH=${gopath} go test ${package}
+        COMMAND ${CATKIN_ENV} env GOPATH=${gopath} rosrun rosgo_build_tools rosgo-test-wrapper.sh ${package}
+        DEPENDS ${_depends})
 
     # Register this test to workspace-wide run_tests target
     if(NOT TARGET run_tests_${PROJECT_NAME}_go_test)
